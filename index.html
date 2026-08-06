@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="baize">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sixty-Four — Chess &amp; Checkers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,600;6..96,700&family=Karla:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-panel="side" data-size="m" data-coords="on" data-pieces="glyph" data-motion="on" data-home="row">
+
+<!-- ============ SVG symbols ============ -->
+<svg style="display:none" aria-hidden="true">
+  <symbol id="ico-chess" viewBox="0 0 64 64">
+    <rect x="2" y="2" width="60" height="60" rx="8" fill="currentColor" opacity=".08"/>
+    <path d="M4 4h14v14H4zM32 4h14v14H32zM18 18h14v14H18zM46 18h14v14H46z" fill="currentColor" opacity=".14"/>
+    <path d="M30 8h4v5h5v4h-5v5h-4v-5h-5v-4h5z" fill="currentColor"/>
+    <path d="M32 24c-8 0-13.5 4.6-13.5 10.2 0 4 2.8 7.2 6.2 9.2L23 52h18l-1.7-8.6c3.4-2 6.2-5.2 6.2-9.2C45.5 28.6 40 24 32 24z" fill="currentColor"/>
+    <path d="M19 52h26l3.2 8H15.8z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ico-checkers" viewBox="0 0 64 64">
+    <rect x="2" y="2" width="60" height="60" rx="8" fill="currentColor" opacity=".08"/>
+    <path d="M4 4h14v14H4zM32 4h14v14H32zM18 18h14v14H18zM46 18h14v14H46z" fill="currentColor" opacity=".14"/>
+    <ellipse cx="32" cy="48" rx="22" ry="9" fill="currentColor"/>
+    <path d="M10 40h44v8H10z" fill="currentColor"/>
+    <ellipse cx="32" cy="40" rx="22" ry="9" fill="currentColor" opacity=".82"/>
+    <path d="M13 32h38v8H13z" fill="currentColor"/>
+    <ellipse cx="32" cy="32" rx="19" ry="8" fill="currentColor"/>
+    <ellipse cx="32" cy="32" rx="10" ry="4" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".45"/>
+  </symbol>
+  <symbol id="ico-mark" viewBox="0 0 64 64">
+    <path d="M0 0h16v16H0zM32 0h16v16H32zM16 16h16v16H16zM48 16h16v16H48zM0 32h16v16H0zM32 32h16v16H32zM16 48h16v16H16zM48 48h16v16H48z" fill="currentColor"/>
+  </symbol>
+</svg>
+
+<!-- ============ header ============ -->
+<header class="topbar">
+  <div class="wrap">
+    <button class="brand" data-go="home" aria-label="Sixty-Four home">
+      <svg class="mark" style="color:var(--accent)"><use href="#ico-mark"/></svg>
+      <span style="text-align:left"><b>Sixty-Four</b><span>Chess &amp; Checkers</span></span>
+    </button>
+    <nav class="nav">
+      <button data-go="home">Home</button>
+      <button data-go="chess">Chess</button>
+      <button data-go="checkers">Checkers</button>
+      <button data-go="settings">Settings</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+<!-- ============ HOME ============ -->
+<section id="s-home" class="screen active">
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <p class="eyebrow">Two games · one grid · eight by eight</p>
+        <h1>One board.<br>Two <em>games.</em></h1>
+        <p class="lede">Play chess or checkers against an opponent that thinks as hard as you want it to. Pick a game, pick a difficulty, and start. Everything is explained if you've never played.</p>
+        <div class="hero-actions">
+          <button class="btn primary" data-go="chess"><svg width="18" height="18"><use href="#ico-chess"/></svg> Play chess</button>
+          <button class="btn" data-go="checkers"><svg width="18" height="18"><use href="#ico-checkers"/></svg> Play checkers</button>
+        </div>
+      </div>
+      <div>
+        <div class="morph"><div class="grid" id="morphGrid"></div></div>
+        <p class="morph-cap" id="morphCap">Chess · opening position</p>
+      </div>
+    </div>
+
+    <div class="pick">
+      <div class="pick-head">
+        <h2>Choose your game</h2>
+        <span class="n">02 available</span>
+      </div>
+      <div class="cards">
+        <button class="card" data-go="chess">
+          <svg class="logo" style="color:var(--accent)"><use href="#ico-chess"/></svg>
+          <span>
+            <span class="h3">Play chess</span>
+            <span class="p">Sixteen pieces a side, six ways to move. Castling, en passant and promotion all included, with legal moves shown as you go.</span>
+            <span class="go">Easy · Normal · Hard →</span>
+          </span>
+        </button>
+        <button class="card" data-go="checkers">
+          <svg class="logo" style="color:var(--accent)"><use href="#ico-checkers"/></svg>
+          <span>
+            <span class="h3">Play checkers</span>
+            <span class="p">Twelve discs a side on the dark squares. Captures are compulsory, jumps chain, and a disc that reaches the far side is crowned.</span>
+            <span class="go">Easy · Normal · Hard →</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CHESS MENU ============ -->
+<section id="s-chess" class="screen">
+  <div class="wrap">
+    <div class="page-head">
+      <svg class="logo" style="color:var(--accent)"><use href="#ico-chess"/></svg>
+      <div>
+        <p class="eyebrow">Game one</p>
+        <h2>Chess</h2>
+      </div>
+    </div>
+    <p class="eyebrow" style="color:var(--muted)">Choose a difficulty</p>
+    <div class="opt-grid">
+      <button class="opt" data-start="chess" data-diff="easy">
+        <span class="lvl">Level 01</span><strong>Easy</strong>
+        <span class="desc">Looks one move ahead and often lets things slide. A fair fight if you're learning.</span>
+      </button>
+      <button class="opt" data-start="chess" data-diff="normal">
+        <span class="lvl">Level 02</span><strong>Normal</strong>
+        <span class="desc">Searches a few moves deep. It will punish a hanging piece but misses longer plans.</span>
+      </button>
+      <button class="opt" data-start="chess" data-diff="hard">
+        <span class="lvl">Level 03</span><strong>Hard</strong>
+        <span class="desc">Thinks for a couple of seconds each turn, checks captures to the end, and rarely blunders.</span>
+      </button>
+    </div>
+    <div class="side-pick">
+      <span class="lab">Play as</span>
+      <span class="seg" id="sidePick">
+        <button data-side="w" aria-pressed="true">White</button>
+        <button data-side="b" aria-pressed="false">Black</button>
+      </span>
+    </div>
+    <div class="sub">
+      <button class="btn ghost" data-go="rules-chess">How to play chess</button>
+      <button class="btn ghost" data-go="home">Back to home</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CHECKERS MENU ============ -->
+<section id="s-checkers" class="screen">
+  <div class="wrap">
+    <div class="page-head">
+      <svg class="logo" style="color:var(--accent)"><use href="#ico-checkers"/></svg>
+      <div>
+        <p class="eyebrow">Game two</p>
+        <h2>Checkers</h2>
+      </div>
+    </div>
+    <p class="eyebrow" style="color:var(--muted)">Choose a difficulty</p>
+    <div class="opt-grid">
+      <button class="opt" data-start="checkers" data-diff="easy">
+        <span class="lvl">Level 01</span><strong>Easy</strong>
+        <span class="desc">Takes the obvious jump and little else. Good for a first game.</span>
+      </button>
+      <button class="opt" data-start="checkers" data-diff="normal">
+        <span class="lvl">Level 02</span><strong>Normal</strong>
+        <span class="desc">Sees four moves ahead, so it spots simple traps and two-for-one trades.</span>
+      </button>
+      <button class="opt" data-start="checkers" data-diff="hard">
+        <span class="lvl">Level 03</span><strong>Hard</strong>
+        <span class="desc">Searches deep into the endgame and sets up multi-jumps several moves early.</span>
+      </button>
+    </div>
+    <div class="side-pick">
+      <span class="lab">Play as</span>
+      <span class="seg" id="sidePickC">
+        <button data-side="r" aria-pressed="true">Red</button>
+        <button data-side="b" aria-pressed="false">Black</button>
+      </span>
+      <span class="muted" style="font-size:13px">Red moves first. Your discs always start at the bottom.</span>
+    </div>
+    <div class="sub">
+      <button class="btn ghost" data-go="rules-checkers">How to play checkers</button>
+      <button class="btn ghost" data-go="home">Back to home</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RULES: CHESS ============ -->
+<section id="s-rules-chess" class="screen">
+  <div class="wrap rules">
+    <p class="eyebrow">How to play</p>
+    <h2 style="font-size:clamp(30px,5vw,44px); margin-bottom:18px">Chess</h2>
+    <p><b>The goal:</b> trap the enemy king so that it is attacked and cannot escape. That's checkmate, and it ends the game immediately.</p>
+
+    <h3>How the pieces move</h3>
+    <div class="legend">
+      <div><div class="g">♔</div><div class="t">King · one square, any direction</div></div>
+      <div><div class="g">♕</div><div class="t">Queen · any distance, any line</div></div>
+      <div><div class="g">♖</div><div class="t">Rook · straight lines only</div></div>
+      <div><div class="g">♗</div><div class="t">Bishop · diagonals only</div></div>
+      <div><div class="g">♘</div><div class="t">Knight · L-shape, jumps over</div></div>
+      <div><div class="g">♙</div><div class="t">Pawn · forward, captures diagonally</div></div>
+    </div>
+    <p>Every piece except the knight is blocked by anything in its path. You capture by landing on an enemy piece and removing it.</p>
+
+    <h3>The three special moves</h3>
+    <ul>
+      <li><b>Castling.</b> If neither your king nor a rook has moved and the squares between them are empty, the king slides two squares toward that rook and the rook hops to its other side. You can't castle out of, through, or into check.</li>
+      <li><b>En passant.</b> If an enemy pawn uses its two-square first move to land beside your pawn, you may capture it as if it had only moved one — but only on the very next turn.</li>
+      <li><b>Promotion.</b> A pawn reaching the far end becomes any piece you choose. Almost always a queen.</li>
+    </ul>
+
+    <h3>Check, checkmate and draws</h3>
+    <p>When your king is attacked you are <b>in check</b> and must deal with it: move the king, block the line, or capture the attacker. If no legal move exists and you're in check, that's <b>checkmate</b>. If no legal move exists and you're <i>not</i> in check, the game is a <b>stalemate</b> — a draw.</p>
+    <div class="keyline">
+      <p style="margin:0">White always moves first. Tap one of your pieces and every legal destination lights up: a dot for a quiet move, a ring for a capture.</p>
+    </div>
+    <div class="sub">
+      <button class="btn primary" data-go="chess">Choose a difficulty</button>
+      <button class="btn ghost" data-go="home">Back to home</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RULES: CHECKERS ============ -->
+<section id="s-rules-checkers" class="screen">
+  <div class="wrap rules">
+    <p class="eyebrow">How to play</p>
+    <h2 style="font-size:clamp(30px,5vw,44px); margin-bottom:18px">Checkers</h2>
+    <p><b>The goal:</b> take all of your opponent's discs, or leave them with no legal move. Either one wins the game.</p>
+
+    <h3>The board and the pieces</h3>
+    <p>Only the dark squares are used, so everything happens on the diagonals. Each side starts with twelve discs on the three rows nearest them. Red always moves first, and whichever colour you pick is drawn at the bottom of the board, moving upward.</p>
+
+    <h3>Moving and jumping</h3>
+    <ul>
+      <li><b>A plain disc</b> moves one square diagonally forward, into an empty square.</li>
+      <li><b>To capture</b>, jump diagonally over an adjacent enemy disc and land on the empty square directly behind it. The jumped disc is removed.</li>
+      <li><b>Jumps are compulsory.</b> If a capture is available anywhere, you must play a capture — the game will only offer you those moves.</li>
+      <li><b>Chain jumps.</b> If the same disc can jump again from its landing square, it must keep going. A four-piece chain in one turn is entirely legal, and the whole chain counts as a single move.</li>
+    </ul>
+
+    <h3>Kings</h3>
+    <p>A disc that reaches the far row is <b>crowned</b> and becomes a king, marked with a crown. Kings move and jump diagonally in <i>all four</i> directions, forward and back. If a disc is crowned in the middle of a jump chain, the turn ends there — it cannot use its new powers until next turn.</p>
+    <div class="keyline">
+      <p style="margin:0">The squares are numbered 1–32, top-left to bottom-right, exactly as they are in written checkers. A move reads <span style="font-family:var(--mono)">11-15</span>; a capture reads <span style="font-family:var(--mono)">23x14</span>.</p>
+    </div>
+    <div class="sub">
+      <button class="btn primary" data-go="checkers">Choose a difficulty</button>
+      <button class="btn ghost" data-go="home">Back to home</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GAME ============ -->
+<section id="s-game" class="screen">
+  <div class="wrap">
+    <div class="page-head" style="margin-bottom:22px">
+      <svg class="logo" id="gameLogo" style="color:var(--accent); width:44px; height:44px"><use href="#ico-chess"/></svg>
+      <div>
+        <p class="eyebrow" id="gameEyebrow">Chess · Normal</p>
+        <h2 id="gameTitle" style="font-size:clamp(24px,4vw,34px)">Chess</h2>
+      </div>
+      <button class="btn sm ghost" style="margin-left:auto" id="btnLeave">Leave game</button>
+    </div>
+
+    <div class="game">
+      <div class="board-wrap">
+        <div class="boardframe"><div class="board" id="board"></div></div>
+      </div>
+      <aside class="panel">
+        <div class="pcard">
+          <h4>Status</h4>
+          <div class="status" id="status">Your move<small id="statusSub">White to play</small></div>
+        </div>
+        <div class="pcard">
+          <h4>Game</h4>
+          <div class="meta" id="meta"></div>
+        </div>
+        <div class="pcard" id="takenCard">
+          <h4>Captured</h4>
+          <div class="taken" id="taken">—</div>
+        </div>
+        <div class="pcard">
+          <h4>Moves</h4>
+          <div class="moves"><table id="movelist"><tbody></tbody></table></div>
+        </div>
+        <div class="controls">
+          <button class="btn sm" id="btnUndo">Undo</button>
+          <button class="btn sm" id="btnNew">New game</button>
+          <button class="btn sm ghost" id="btnRules">Rules</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SETTINGS ============ -->
+<section id="s-settings" class="screen">
+  <div class="wrap">
+    <div class="page-head">
+      <div>
+        <p class="eyebrow">Preferences</p>
+        <h2>Settings</h2>
+      </div>
+    </div>
+
+    <div class="set-group">
+      <div class="lbl"><h3>Theme</h3><p>Changes the colours everywhere, including the board and pieces.</p></div>
+      <div class="swatches" id="themeSwatches"></div>
+    </div>
+
+    <div class="set-group">
+      <div class="lbl"><h3>Layout</h3><p>How the board and its side panel are arranged.</p></div>
+      <div class="rows">
+        <div class="row">
+          <div class="rl"><strong>Panel position</strong><span>Beside the board, or underneath it.</span></div>
+          <span class="seg" data-setting="panel">
+            <button data-val="side">Beside</button><button data-val="stack">Below</button>
+          </span>
+        </div>
+        <div class="row">
+          <div class="rl"><strong>Board size</strong><span>How much room the board takes on large screens.</span></div>
+          <span class="seg" data-setting="size">
+            <button data-val="s">Small</button><button data-val="m">Medium</button><button data-val="l">Large</button>
+          </span>
+        </div>
+        <div class="row">
+          <div class="rl"><strong>Home page cards</strong><span>Show the two games side by side or stacked.</span></div>
+          <span class="seg" data-setting="home">
+            <button data-val="row">Side by side</button><button data-val="column">Stacked</button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="set-group">
+      <div class="lbl"><h3>Board</h3><p>What's drawn on the squares while you play.</p></div>
+      <div class="rows">
+        <div class="row">
+          <div class="rl"><strong>Piece style</strong><span>Classic symbols, or plain letters if symbols are hard to read.</span></div>
+          <span class="seg" data-setting="pieces">
+            <button data-val="glyph">Symbols</button><button data-val="letter">Letters</button>
+          </span>
+        </div>
+        <div class="row">
+          <div class="rl"><strong>Coordinates</strong><span>File and rank labels on the edge squares.</span></div>
+          <span class="seg" data-setting="coords">
+            <button data-val="on">Show</button><button data-val="off">Hide</button>
+          </span>
+        </div>
+        <div class="row">
+          <div class="rl"><strong>Motion</strong><span>Turn off to remove animation and hover movement.</span></div>
+          <span class="seg" data-setting="motion">
+            <button data-val="on">On</button><button data-val="off">Off</button>
+          </span>
+        </div>
+      </div>
+    </div>
+    <p class="muted" style="font-size:13px; margin-top:24px">Settings apply straight away and last for this visit.</p>
+  </div>
+</section>
+</main>
+
+<footer><div class="wrap"><span>Sixty-Four — chess &amp; checkers</span><span>64 squares · 2 games · 3 levels</span></div></footer>
+
+<!-- ============ modal ============ -->
+<div class="modal" id="modal"><div class="box">
+  <h3 id="mTitle">Game over</h3>
+  <p id="mText">—</p>
+  <div id="mBody"></div>
+  <div class="controls" id="mActions" style="justify-content:center"></div>
+</div></div>
+
+<script src="js/engine.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
