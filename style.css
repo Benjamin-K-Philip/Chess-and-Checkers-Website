@@ -265,8 +265,8 @@ button{ font-family:inherit; color:inherit; }
 
 /* chess pieces */
 .piece{ position:relative; z-index:2; transition:transform var(--speed); }
-.piece.w{ color:var(--white-piece); text-shadow:0 1px 0 rgba(0,0,0,.35), 0 0 2px rgba(0,0,0,.5); }
-.piece.b{ color:var(--black-piece); text-shadow:0 1px 0 rgba(255,255,255,.14); }
+.piece.w{ color:var(--white-piece); text-shadow:0 0 1px rgba(0,0,0,.9), 0 0 3px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.45); }
+.piece.b{ color:var(--black-piece); text-shadow:0 0 1px rgba(255,255,255,.75), 0 0 3px rgba(255,255,255,.35); }
 [data-pieces="letter"] .piece{ font-family:var(--mono); font-weight:700; font-size:.62em; }
 .sq:hover .piece{ transform:scale(1.06); }
 
@@ -339,7 +339,10 @@ button{ font-family:inherit; color:inherit; }
 .takerow{ display:flex; align-items:baseline; gap:10px; margin-bottom:6px; }
 .takerow .tlab{ font-family:var(--mono); font-size:10px; letter-spacing:.13em; text-transform:uppercase;
   color:var(--muted); flex:none; width:8.6em; }
-.takerow .taken{ font-size:21px; line-height:1.25; min-height:1.1em; word-break:break-all; }
+.takerow .taken{ font-size:21px; line-height:1.25; min-height:1.1em; word-break:break-all; color:var(--ink); }
+.takerow .taken .w, .takerow .taken .b{ color:var(--ink); text-shadow:none; }
+.takerow .taken .disc-r{ color:var(--red-piece); }
+.takerow .taken .disc-b{ color:var(--ink); }
 .takerow .none{ font-size:12.5px; color:var(--muted); }
 .mat{ font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase;
   color:var(--accent); margin-top:8px; border-top:1px solid var(--line); padding-top:8px; }

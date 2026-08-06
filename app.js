@@ -26,9 +26,10 @@ function writeStore(patch){
   try{ localStorage.setItem(STORE, JSON.stringify(Object.assign(readStore(), patch))); }catch(e){}
 }
 function saveGame(){
-  if(!G || G.over) return writeStore({game:null});
-  writeStore({game:{kind:G.kind, diff:G.diff, human:G.human, state:G.state, log:G.log,
-                    yourTake:G.yourTake, aiTake:G.aiTake, last:G.last, seen:G.seen}});
+  const pack = g => (g && !g.over) ? {kind:g.kind, diff:g.diff, human:g.human, state:g.state,
+                                      log:g.log, yourTake:g.yourTake, aiTake:g.aiTake,
+                                      last:g.last, seen:g.seen} : null;
+  writeStore({games:{chess:pack(GAMES.chess), checkers:pack(GAMES.checkers)}, game:null});
 }
 function loadSettings(){
   const saved = readStore().settings;
@@ -79,21 +80,46 @@ function show(name){
   window.scrollTo({top:0, behavior: settings.motion === 'on' ? 'smooth' : 'auto'});
 }
 
+const cap = w => w[0].toUpperCase() + w.slice(1);
+const liveGame = k => GAMES[k] && !GAMES[k].over;
+const gameDesc = k => `${cap(k)} · ${cap(GAMES[k].diff)} · ${GAMES[k].log.length} moves played`;
+
 function updateResume(){
-  const live = G && !G.over;
-  const label = live ? `${G.kind === 'chess' ? 'Chess' : 'Checkers'} · ${G.diff[0].toUpperCase()+G.diff.slice(1)} · ${G.log.length} moves played` : '';
-  for(const key of ['home','chess','checkers']){
-    const bar = document.getElementById('resume-' + key);
+  for(const k of ['chess','checkers']){
+    const bar = document.getElementById('resume-' + k);
     if(!bar) continue;
-    const showIt = live && (key === 'home' || key === G.kind);
-    bar.classList.toggle('on', !!showIt);
-    if(showIt) document.getElementById('resume-' + key + '-txt').textContent = label;
+    bar.classList.toggle('on', !!liveGame(k));
+    if(liveGame(k)) document.getElementById('resume-' + k + '-txt').textContent = gameDesc(k);
+  }
+  const home = document.getElementById('resume-home');
+  if(!home) return;
+  const kinds = ['chess','checkers'].filter(liveGame);
+  home.classList.toggle('on', kinds.length > 0);
+  if(kinds.length){
+    home.innerHTML =
+      `<div class="txt"><b>${kinds.length > 1 ? 'Games' : 'Game'} in progress</b>${kinds.map(gameDesc).join(' — ')}</div>` +
+      kinds.map(k => `<button class="btn primary sm" data-resume="${k}">Resume ${k}</button>`).join('') +
+      `<button class="btn ghost sm" data-abandon>Clear ${kinds.length > 1 ? 'both' : ''}</button>`;
   }
 }
 
+function resumeGame(kind){
+  const g = GAMES[kind];
+  if(!g || g.over) return;
+  G = g;
+  setHeader(kind, g.diff);
+  show('game');
+  draw();
+  if(G.state.turn !== G.human && !G.busy) aiTurn();   // it was the computer's turn when you left
+}
+
 document.addEventListener('click', e => {
-  if(e.target.closest('[data-resume]') && G && !G.over){ show('game'); draw(); }
-  if(e.target.closest('[data-abandon]')){ G = null; saveGame(); updateResume(); }
+  const r = e.target.closest('[data-resume]');
+  if(r){ resumeGame(r.dataset.resume); return; }
+  if(e.target.closest('[data-abandon]')){
+    GAMES.chess = GAMES.checkers = null; G = null;
+    saveGame(); updateResume();
+  }
 });
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-go]'); if(!b) return;
@@ -134,6 +160,7 @@ function buildMorph(){
 }
 
 /* ---------- game state ---------- */
+const GAMES = {chess:null, checkers:null};   // each game keeps its own slot
 let G = null;
 let chessSide = 'w';
 let checkersSide = 'r';
@@ -150,8 +177,15 @@ wireSidePick('#sidePickC', v => checkersSide = v);
 
 $$('[data-start]').forEach(b => b.addEventListener('click', () => start(b.dataset.start, b.dataset.diff)));
 
+function setHeader(kind, diff){
+  const label = cap(diff);
+  $('#gameTitle').textContent = kind === 'chess' ? 'Chess' : 'Checkers';
+  $('#gameEyebrow').textContent = `${kind === 'chess' ? 'Chess' : 'Checkers'} · ${label}`;
+  $('#gameLogo').innerHTML = `<use href="#ico-${kind}"/>`;
+}
+
 function start(kind, diff){
-  G = {
+  G = GAMES[kind] = {
     kind, diff,
     human: kind === 'chess' ? chessSide : checkersSide,
     state: kind === 'chess' ? CHESS.newGame() : DRAUGHTS.newGame(),
@@ -159,11 +193,9 @@ function start(kind, diff){
     sel: null, opts: [], last: null, focus: null, token: 0,
     busy: false, over: false, hint: '', say: ''
   };
-  const label = diff[0].toUpperCase() + diff.slice(1);
-  $('#gameTitle').textContent = kind === 'chess' ? 'Chess' : 'Checkers';
-  $('#gameEyebrow').textContent = `${kind === 'chess' ? 'Chess' : 'Checkers'} · ${label}`;
-  $('#gameLogo').innerHTML = `<use href="#ico-${kind}"/>`;
+  setHeader(kind, diff);
   $('#takenCard').style.display = '';
+  saveGame();
   show('game');
   draw();
   if(G.human === 'b') aiTurn();   // white in chess, red in checkers moves first
@@ -344,9 +376,9 @@ function drawCaptured(){
     if(G.kind === 'chess')
       return list.slice().sort((a,b) => CH_VAL[b.t] - CH_VAL[a.t])
                  .map(p => `<span class="${p.c}">${GLYPH[p.c][p.t]}</span>`).join('');
-    const col = c => c === 'r' ? 'style="color:var(--red-piece)"'
-                               : 'style="color:var(--blue-piece);-webkit-text-stroke:1px var(--muted)"';
-    return `<span ${col(list[0])}>${'●'.repeat(list.length)}</span>`;
+    // filled disc for red, hollow for black, both in the panel's text colour
+    const red = list[0] === 'r';
+    return `<span class="${red ? 'disc-r' : 'disc-b'}">${(red ? '●' : '○').repeat(list.length)}</span>`;
   };
   $('#takenMine').innerHTML   = render(G.yourTake);
   $('#takenTheirs').innerHTML = render(G.aiTake);
@@ -475,8 +507,9 @@ function aiTurn(){
   const tok = ++G.token;
   draw();
 
+  const mine = G;                          // the game this search belongs to
   const finish = m => {
-    if(!G || G.token !== tok) return;      // undo / new game happened meanwhile
+    if(!G || G !== mine || G.token !== tok) return;   // switched games / undo / new game
     G.busy = false;
     if(m) applyMove(m); else { checkOver(); draw(); }
   };
@@ -607,20 +640,20 @@ document.addEventListener('keydown', e => {
 });
 
 /* ---------- pick up an unfinished game from a previous visit ---------- */
-function restoreGame(){
-  const saved = readStore().game;
-  if(!saved || !saved.state) return;
-  try{
-    G = Object.assign({
-      history: [], sel: null, opts: [], focus: null, token: 0,
-      busy: false, over: false, hint: '', say: '', seen: {}
-    }, saved);
-    const label = G.diff[0].toUpperCase() + G.diff.slice(1);
-    $('#gameTitle').textContent = G.kind === 'chess' ? 'Chess' : 'Checkers';
-    $('#gameEyebrow').textContent = `${G.kind === 'chess' ? 'Chess' : 'Checkers'} · ${label}`;
-    $('#gameLogo').innerHTML = `<use href="#ico-${G.kind}"/>`;
-    if(G.state.turn !== G.human) aiTurn();
-  }catch(err){ G = null; }
+function restoreGames(){
+  const store = readStore();
+  const saved = store.games || (store.game ? {[store.game.kind]: store.game} : null);
+  if(!saved) return;
+  for(const k of ['chess','checkers']){
+    const d = saved[k];
+    if(!d || !d.state) continue;
+    try{
+      GAMES[k] = Object.assign({
+        history: [], sel: null, opts: [], focus: null, token: 0,
+        busy: false, over: false, hint: '', say: '', seen: {}
+      }, d);
+    }catch(err){ GAMES[k] = null; }
+  }
 }
 
 /* ---------- go ---------- */
@@ -628,5 +661,5 @@ loadSettings();
 buildSettings();
 applySettings();
 buildMorph();
-restoreGame();
+restoreGames();
 updateResume();
