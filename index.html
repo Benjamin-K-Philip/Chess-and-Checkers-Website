@@ -12,7 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,600;6..96,700&family=Karla:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-panel="side" data-size="m" data-coords="on" data-pieces="glyph" data-motion="on" data-home="row">
+<body data-panel="side" data-size="m" data-coords="off" data-pieces="glyph" data-motion="on" data-home="row">
 
 <!-- ============ SVG symbols ============ -->
 <svg style="display:none" aria-hidden="true">
@@ -58,6 +58,11 @@
 <!-- ============ HOME ============ -->
 <section id="s-home" class="screen active">
   <div class="wrap">
+    <div class="resume" id="resume-home">
+      <div class="txt"><b>Game in progress</b><span id="resume-home-txt"></span></div>
+      <button class="btn primary sm" data-resume>Resume game</button>
+      <button class="btn ghost sm" data-abandon>Start over</button>
+    </div>
     <div class="hero">
       <div>
         <p class="eyebrow">Two games · one grid · eight by eight</p>
@@ -111,6 +116,10 @@
         <h2>Chess</h2>
       </div>
     </div>
+    <div class="resume" id="resume-chess">
+      <div class="txt"><b>Game in progress</b><span id="resume-chess-txt"></span></div>
+      <button class="btn primary sm" data-resume>Resume game</button>
+    </div>
     <p class="eyebrow" style="color:var(--muted)">Choose a difficulty</p>
     <div class="opt-grid">
       <button class="opt" data-start="chess" data-diff="easy">
@@ -149,6 +158,10 @@
         <p class="eyebrow">Game two</p>
         <h2>Checkers</h2>
       </div>
+    </div>
+    <div class="resume" id="resume-checkers">
+      <div class="txt"><b>Game in progress</b><span id="resume-checkers-txt"></span></div>
+      <button class="btn primary sm" data-resume>Resume game</button>
     </div>
     <p class="eyebrow" style="color:var(--muted)">Choose a difficulty</p>
     <div class="opt-grid">
@@ -261,12 +274,13 @@
 
     <div class="game">
       <div class="board-wrap">
-        <div class="boardframe"><div class="board" id="board"></div></div>
+        <div class="boardframe"><div class="board" id="board" role="grid" aria-label="Game board. Use the arrow keys to move between squares and Enter to select."></div></div>
+        <p class="kbdhint muted" style="font-size:12.5px;margin:10px 2px 0">Arrow keys move between squares, Enter selects and moves.</p>
       </div>
       <aside class="panel">
         <div class="pcard">
           <h4>Status</h4>
-          <div class="status" id="status">Your move<small id="statusSub">White to play</small></div>
+          <div class="status" id="status" role="status" aria-live="polite">Your move<small id="statusSub">White to play</small></div>
         </div>
         <div class="pcard">
           <h4>Game</h4>
@@ -274,7 +288,9 @@
         </div>
         <div class="pcard" id="takenCard">
           <h4>Captured</h4>
-          <div class="taken" id="taken">—</div>
+          <div class="takerow"><span class="tlab">You took</span><span class="taken" id="takenMine"></span></div>
+          <div class="takerow"><span class="tlab">Computer took</span><span class="taken" id="takenTheirs"></span></div>
+          <div class="mat" id="material"></div>
         </div>
         <div class="pcard">
           <h4>Moves</h4>
@@ -283,6 +299,7 @@
         <div class="controls">
           <button class="btn sm" id="btnUndo">Undo</button>
           <button class="btn sm" id="btnNew">New game</button>
+          <button class="btn sm ghost" id="btnResign">Resign</button>
           <button class="btn sm ghost" id="btnRules">Rules</button>
         </div>
       </aside>
@@ -341,7 +358,7 @@
         <div class="row">
           <div class="rl"><strong>Coordinates</strong><span>File and rank labels on the edge squares.</span></div>
           <span class="seg" data-setting="coords">
-            <button data-val="on">Show</button><button data-val="off">Hide</button>
+            <button data-val="off">Hide</button><button data-val="on">Show</button>
           </span>
         </div>
         <div class="row">

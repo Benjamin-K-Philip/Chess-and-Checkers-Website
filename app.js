@@ -15,7 +15,25 @@ const THEMES = [
   {id:'terminal', name:'Terminal',      note:'Mono green',   cols:['#060E08','#4FE07B','#1E4A2A','#0C2413']},
   {id:'rosewood', name:'Rosewood',      note:'Classic wood', cols:['#19110E','#D9A05B','#E8D3B3','#7B4A34']}
 ];
-const settings = {theme:'baize', panel:'side', size:'m', coords:'on', pieces:'glyph', motion:'on', home:'row'};
+const settings = {theme:'baize', panel:'side', size:'m', coords:'off', pieces:'glyph', motion:'on', home:'row'};
+
+/* ---------- saved state (settings + game in progress) ---------- */
+const STORE = 'sixtyfour.v1';
+function readStore(){
+  try{ return JSON.parse(localStorage.getItem(STORE)) || {}; }catch(e){ return {}; }
+}
+function writeStore(patch){
+  try{ localStorage.setItem(STORE, JSON.stringify(Object.assign(readStore(), patch))); }catch(e){}
+}
+function saveGame(){
+  if(!G || G.over) return writeStore({game:null});
+  writeStore({game:{kind:G.kind, diff:G.diff, human:G.human, state:G.state, log:G.log,
+                    yourTake:G.yourTake, aiTake:G.aiTake, last:G.last, seen:G.seen}});
+}
+function loadSettings(){
+  const saved = readStore().settings;
+  if(saved) for(const k in settings) if(saved[k] !== undefined) settings[k] = saved[k];
+}
 
 function applySettings(){
   document.documentElement.dataset.theme = settings.theme;
@@ -25,6 +43,7 @@ function applySettings(){
     const key = seg.dataset.setting;
     Array.from(seg.children).forEach(b => b.setAttribute('aria-pressed', b.dataset.val === settings[key]));
   });
+  writeStore({settings});
 }
 function buildSettings(){
   $('#themeSwatches').innerHTML = THEMES.map(t => `
@@ -56,8 +75,26 @@ function show(name){
                (name === 'game' && G && G.kind === b.dataset.go);
     on ? b.setAttribute('aria-current','page') : b.removeAttribute('aria-current');
   });
+  updateResume();
   window.scrollTo({top:0, behavior: settings.motion === 'on' ? 'smooth' : 'auto'});
 }
+
+function updateResume(){
+  const live = G && !G.over;
+  const label = live ? `${G.kind === 'chess' ? 'Chess' : 'Checkers'} · ${G.diff[0].toUpperCase()+G.diff.slice(1)} · ${G.log.length} moves played` : '';
+  for(const key of ['home','chess','checkers']){
+    const bar = document.getElementById('resume-' + key);
+    if(!bar) continue;
+    const showIt = live && (key === 'home' || key === G.kind);
+    bar.classList.toggle('on', !!showIt);
+    if(showIt) document.getElementById('resume-' + key + '-txt').textContent = label;
+  }
+}
+
+document.addEventListener('click', e => {
+  if(e.target.closest('[data-resume]') && G && !G.over){ show('game'); draw(); }
+  if(e.target.closest('[data-abandon]')){ G = null; saveGame(); updateResume(); }
+});
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-go]'); if(!b) return;
   show(b.dataset.go);
@@ -118,8 +155,9 @@ function start(kind, diff){
     kind, diff,
     human: kind === 'chess' ? chessSide : checkersSide,
     state: kind === 'chess' ? CHESS.newGame() : DRAUGHTS.newGame(),
-    history: [], log: [], taken: [], sel: null, opts: [], last: null,
-    busy: false, over: false, hint: ''
+    history: [], log: [], yourTake: [], aiTake: [], seen: {},
+    sel: null, opts: [], last: null, focus: null, token: 0,
+    busy: false, over: false, hint: '', say: ''
   };
   const label = diff[0].toUpperCase() + diff.slice(1);
   $('#gameTitle').textContent = kind === 'chess' ? 'Chess' : 'Checkers';
@@ -136,6 +174,7 @@ const isHumanTurn = () => G && G.state.turn === G.human && !G.over && !G.busy;
 /* ---------- board drawing ---------- */
 function draw(){
   if(!G) return;
+  if(G.focus === null || G.focus === undefined) G.focus = defaultFocus();
   G.kind === 'chess' ? drawChess() : drawCheckers();
   drawPanel();
 }
@@ -145,17 +184,30 @@ function orient(i){          // board index <-> display index; your side sits at
 }
 function unorient(i){ return orient(i); } // involution
 
-function squareShell(i, cls, inner){
+const PIECE_NAME = {p:'pawn', n:'knight', b:'bishop', r:'rook', q:'queen', k:'king'};
+
+function squareShell(i, d, cls, inner, label){
   const r = i >> 3, c = i & 7;
   const light = (r + c) % 2 === 0;
   const file = String.fromCharCode(97 + c), rank = 8 - r;
   const showFile = (G.human === 'b') ? r === 0 : r === 7;
   const showRank = (G.human === 'b') ? c === 7 : c === 0;
-  return `<div class="sq ${light?'l':'d'} ${cls}" data-i="${i}">
+  const tab = d === G.focus ? 0 : -1;
+  return `<button type="button" role="gridcell" class="sq ${light?'l':'d'} ${cls}" data-i="${i}" data-d="${d}"
+    tabindex="${tab}" aria-label="${label}">
     ${inner}
     ${showFile ? `<span class="coord f">${file}</span>` : ''}
     ${showRank ? `<span class="coord r">${rank}</span>` : ''}
-  </div>`;
+  </button>`;
+}
+
+/* first square the keyboard should land on: one of your own pieces */
+function defaultFocus(){
+  for(let d=0; d<64; d++){
+    const p = G.state.board[orient(d)];
+    if(p && p.c === G.human) return d;
+  }
+  return 0;
 }
 
 function drawChess(){
@@ -176,10 +228,18 @@ function drawChess(){
     let cls = '';
     if(G.sel === i) cls += ' sel';
     if(G.last && (G.last[0] === i || G.last[1] === i)) cls += ' last';
+    if(G.last && G.last[1] === i) cls += ' lastto';
     if(i === checkSq) cls += ' check';
-    html += squareShell(i, cls, inner);
+
+    const name = CHESS.sqName(i);
+    let label = name + ', ' + (p ? (p.c === 'w' ? 'white ' : 'black ') + PIECE_NAME[p.t] : 'empty');
+    if(dests.has(i)) label += p ? ', can capture here' : ', can move here';
+    if(G.sel === i) label += ', selected';
+    if(i === checkSq) label += ', in check';
+    html += squareShell(i, d, cls, inner, label);
   }
   $('#board').innerHTML = html;
+  restoreFocus();
 }
 
 function drawCheckers(){
@@ -201,10 +261,28 @@ function drawCheckers(){
     let cls = '';
     if(G.sel === i) cls += ' sel';
     if(G.last && G.last.includes(i)) cls += ' last';
-    html += `<div class="sq ${light?'l':'d'}${cls}" data-i="${i}">${inner}
-      ${DRAUGHTS.dark(i) && settings.coords === 'on' ? `<span class="coord f">${DRAUGHTS.NUM[i]}</span>` : ''}</div>`;
+    if(G.last && G.last[G.last.length-1] === i) cls += ' lastto';
+
+    const dark = DRAUGHTS.dark(i);
+    const who = p ? (p.c === G.human ? 'your ' : 'the computer\'s ') : '';
+    let label = dark ? 'square ' + DRAUGHTS.NUM[i] : 'unused light square';
+    if(dark) label += ', ' + (p ? who + (p.c === 'r' ? 'red ' : 'black ') + (p.k ? 'king' : 'disc') : 'empty');
+    if(dests.has(i)) label += dests.get(i).caps.length ? ', jump lands here' : ', can move here';
+    if(G.sel === i) label += ', selected';
+    const tab = d === G.focus ? 0 : -1;
+    html += `<button type="button" role="gridcell" class="sq ${light?'l':'d'}${cls}" data-i="${i}" data-d="${d}"
+      tabindex="${tab}" aria-label="${label}"${dark ? '' : ' aria-hidden="true"'}>${inner}
+      ${dark && settings.coords === 'on' ? `<span class="coord f">${DRAUGHTS.NUM[i]}</span>` : ''}</button>`;
   }
   $('#board').innerHTML = html;
+  restoreFocus();
+}
+
+/* keep the keyboard where it was after the board is redrawn */
+function restoreFocus(){
+  if(!G || !G.kbd || G.over) return;
+  const el = $('#board').querySelector(`[data-d="${G.focus}"]`);
+  if(el) el.focus({preventScroll:true});
 }
 
 /* ---------- panel ---------- */
@@ -223,10 +301,12 @@ function drawPanel(){
     st.firstChild.textContent = 'Your move';
     if(G.kind === 'chess'){
       const check = CHESS.inCheck(s, s.turn);
-      sub.textContent = (G.human === 'w' ? 'White' : 'Black') + ' to play' + (check ? ' · you are in check' : '');
+      sub.textContent = (G.say ? G.say + ' · ' : '') +
+        (G.human === 'w' ? 'White' : 'Black') + ' to play' + (check ? ' · you are in check' : '');
     } else {
       const forced = DRAUGHTS.moves(s).some(m => m.caps.length);
-      sub.textContent = G.hint || (forced ? 'A capture is available, so you must take it.' : 'Move a disc diagonally forward.');
+      sub.textContent = (G.say ? G.say + ' · ' : '') +
+        (G.hint || (forced ? 'A capture is available, so you must take it.' : 'Move a disc diagonally forward.'));
     }
   }
 
@@ -243,19 +323,7 @@ function drawPanel(){
   }
   $('#meta').innerHTML = chips.join('');
 
-  if(G.kind === 'chess'){
-    $('#taken').innerHTML = G.taken.length
-      ? G.taken.map(p => `<span class="${p.c}">${GLYPH[p.c][p.t]}</span>`).join('')
-      : '<span class="muted" style="font-size:13px">Nothing taken yet</span>';
-  } else {
-    const foe = DRAUGHTS.other(G.human);
-    const col = c => c === 'r' ? 'style="color:var(--red-piece)"'
-                               : 'style="color:var(--blue-piece);-webkit-text-stroke:1px var(--muted)"';
-    const mine = G.taken.filter(c => c === foe).length, theirs = G.taken.filter(c => c === G.human).length;
-    $('#taken').innerHTML = G.taken.length
-      ? `<span ${col(foe)}>${'●'.repeat(mine)}</span> <span ${col(G.human)}>${'●'.repeat(theirs)}</span>`
-      : '<span class="muted" style="font-size:13px">Nothing taken yet</span>';
-  }
+  drawCaptured();
 
   const rows = [];
   for(let i=0; i<G.log.length; i+=2){
@@ -264,6 +332,35 @@ function drawPanel(){
   const tb = $('#movelist').tBodies[0];
   tb.innerHTML = rows.length ? rows.join('') : '<tr><td class="muted">No moves yet</td></tr>';
   const box = $('.moves'); box.scrollTop = box.scrollHeight;
+}
+
+/* pieces you have taken, and pieces the computer has taken, kept apart */
+const CH_VAL = {p:1, n:3, b:3, r:5, q:9, k:0};
+
+function drawCaptured(){
+  const none = '<span class="none">none yet</span>';
+  const render = list => {
+    if(!list.length) return none;
+    if(G.kind === 'chess')
+      return list.slice().sort((a,b) => CH_VAL[b.t] - CH_VAL[a.t])
+                 .map(p => `<span class="${p.c}">${GLYPH[p.c][p.t]}</span>`).join('');
+    const col = c => c === 'r' ? 'style="color:var(--red-piece)"'
+                               : 'style="color:var(--blue-piece);-webkit-text-stroke:1px var(--muted)"';
+    return `<span ${col(list[0])}>${'●'.repeat(list.length)}</span>`;
+  };
+  $('#takenMine').innerHTML   = render(G.yourTake);
+  $('#takenTheirs').innerHTML = render(G.aiTake);
+
+  let note = '';
+  if(G.kind === 'chess'){
+    const sum = l => l.reduce((t,p) => t + CH_VAL[p.t], 0);
+    const d = sum(G.yourTake) - sum(G.aiTake);
+    note = d === 0 ? 'Material level' : (d > 0 ? `You are up ${d} point${d>1?'s':''}` : `Computer is up ${-d} point${-d>1?'s':''}`);
+  } else {
+    const d = G.aiTake.length ? G.yourTake.length - G.aiTake.length : G.yourTake.length;
+    note = d === 0 ? 'Discs level' : (d > 0 ? `You are up ${d} disc${d>1?'s':''}` : `Computer is up ${-d} disc${-d>1?'s':''}`);
+  }
+  $('#material').textContent = note;
 }
 
 /* ---------- interaction ---------- */
@@ -328,38 +425,85 @@ function playHuman(m){
 
 function applyMove(m){
   const s = G.state;
-  G.history.push({state: CLONE(s), log: G.log.slice(), taken: G.taken.slice(), last: G.last});
+  const mover = s.turn, byHuman = mover === G.human;
+  const bag = byHuman ? G.yourTake : G.aiTake;
+  G.history.push({state: CLONE(s), log: G.log.slice(), yourTake: G.yourTake.slice(),
+                  aiTake: G.aiTake.slice(), last: G.last, seen: Object.assign({}, G.seen)});
+  let text;
   if(G.kind === 'chess'){
-    G.log.push(CHESS.san(s, m));
-    if(m.cap) G.taken.push(m.cap);
+    text = CHESS.san(s, m);
+    G.log.push(text);
+    if(m.cap) bag.push(m.cap);
     G.last = [m.from, m.to];
     G.state = CHESS.make(s, m);
+    const key = CHESS.posKey(G.state);
+    G.seen[key] = (G.seen[key] || 0) + 1;
   } else {
-    G.log.push(DRAUGHTS.notate(m));
-    m.caps.forEach(c => G.taken.push(s.board[c].c));
+    text = DRAUGHTS.notate(m);
+    G.log.push(text);
+    m.caps.forEach(c => bag.push(s.board[c].c));
     G.last = [m.path[0], m.path[m.path.length-1]];
     G.state = DRAUGHTS.make(s, m);
   }
+  G.say = byHuman ? '' : 'Computer played ' + text;
   G.sel = null; G.opts = []; G.hint = '';
   checkOver();
+  saveGame();
   draw();
 }
 const CLONE = s => (G.kind === 'chess' ? CHESS.clone(s) : DRAUGHTS.clone(s));
 
+/* The search runs in a Worker so the page never freezes. If Workers are
+   unavailable (opening the file straight off disk, for instance) it falls
+   back to running on the main thread. */
+let worker = null;
+(function makeWorker(){
+  try{
+    const engineURL = new URL('engine.js', document.baseURI).href;
+    const src = `importScripts(${JSON.stringify(engineURL)});
+      onmessage = function(e){
+        var d = e.data, eng = d.kind === 'chess' ? CHESS : DRAUGHTS;
+        postMessage(eng.best(d.state, d.diff));
+      };`;
+    worker = new Worker(URL.createObjectURL(new Blob([src], {type:'text/javascript'})));
+  }catch(err){ worker = null; }
+})();
+
 function aiTurn(){
   if(G.over) return;
   G.busy = true; G.sel = null; G.opts = [];
+  const tok = ++G.token;
   draw();
-  requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
-    const m = (G.kind === 'chess' ? CHESS : DRAUGHTS).best(G.state, G.diff);
+
+  const finish = m => {
+    if(!G || G.token !== tok) return;      // undo / new game happened meanwhile
     G.busy = false;
     if(m) applyMove(m); else { checkOver(); draw(); }
+  };
+  const onMainThread = () => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
+    finish((G.kind === 'chess' ? CHESS : DRAUGHTS).best(G.state, G.diff));
   }, 30)));
+
+  if(worker){
+    let settled = false;
+    worker.onmessage = e => { if(!settled){ settled = true; finish(e.data); } };
+    worker.onerror   = () => { if(!settled){ settled = true; worker = null; onMainThread(); } };
+    try{ worker.postMessage({kind:G.kind, state:G.state, diff:G.diff}); }
+    catch(err){ settled = true; worker = null; onMainThread(); }
+  } else onMainThread();
 }
 
 function checkOver(){
   const s = G.state;
   const r = G.kind === 'chess' ? CHESS.result(s) : DRAUGHTS.result(s);
+  if(G.kind === 'chess' && !r.over && G.seen[CHESS.posKey(s)] >= 3){
+    G.over = true;
+    G.overTitle = 'Draw — threefold repetition';
+    G.overText  = 'The same position has now appeared three times.';
+    saveGame();
+    setTimeout(showResult, 420);
+    return;
+  }
   if(!r.over) return;
   G.over = true;
   if(G.kind === 'chess'){
@@ -415,13 +559,45 @@ $('#btnUndo').addEventListener('click', () => {
   // step back until it is the human's turn again
   let h;
   do{ h = G.history.pop(); } while(G.history.length && h.state.turn !== G.human);
-  G.state = h.state; G.log = h.log; G.taken = h.taken; G.last = h.last;
-  G.over = false; G.sel = null; G.opts = []; G.hint = '';
-  closeModal(); draw();
+  G.state = h.state; G.log = h.log; G.last = h.last;
+  G.yourTake = h.yourTake; G.aiTake = h.aiTake; G.seen = h.seen;
+  G.over = false; G.sel = null; G.opts = []; G.hint = ''; G.say = ''; G.token++;
+  closeModal(); saveGame(); draw();
 });
 $('#btnNew').addEventListener('click',  () => G && start(G.kind, G.diff));
 $('#btnRules').addEventListener('click', () => G && show('rules-' + G.kind));
 $('#btnLeave').addEventListener('click', () => show(G ? G.kind : 'home'));
+
+$('#btnResign').addEventListener('click', () => {
+  if(!G || G.over) return;
+  G.over = true; G.token++;
+  G.overTitle = 'You resigned';
+  G.overText  = G.kind === 'chess' ? 'The game is awarded to the computer.'
+                                   : 'The computer takes the game.';
+  saveGame(); draw(); showResult();
+});
+
+/* arrow keys walk the board, Enter selects — squares are buttons, so Enter
+   and Space already fire the click handler */
+$('#board').addEventListener('keydown', e => {
+  if(!G) return;
+  const step = {ArrowUp:-8, ArrowDown:8, ArrowLeft:-1, ArrowRight:1}[e.key];
+  if(step === undefined) return;
+  e.preventDefault();
+  const d = G.focus === null ? defaultFocus() : G.focus;
+  const col = d & 7;
+  if((step === -1 && col === 0) || (step === 1 && col === 7)) return;
+  const next = d + step;
+  if(next < 0 || next > 63) return;
+  G.focus = next; G.kbd = true;
+  $$('#board .sq').forEach(b => b.setAttribute('tabindex', +b.dataset.d === next ? 0 : -1));
+  const el = $('#board').querySelector(`[data-d="${next}"]`);
+  if(el) el.focus({preventScroll:true});
+});
+$('#board').addEventListener('focusin', e => {
+  const sq = e.target.closest('.sq');
+  if(sq) G.focus = +sq.dataset.d;
+});
 
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape'){
@@ -430,7 +606,27 @@ document.addEventListener('keydown', e => {
   }
 });
 
+/* ---------- pick up an unfinished game from a previous visit ---------- */
+function restoreGame(){
+  const saved = readStore().game;
+  if(!saved || !saved.state) return;
+  try{
+    G = Object.assign({
+      history: [], sel: null, opts: [], focus: null, token: 0,
+      busy: false, over: false, hint: '', say: '', seen: {}
+    }, saved);
+    const label = G.diff[0].toUpperCase() + G.diff.slice(1);
+    $('#gameTitle').textContent = G.kind === 'chess' ? 'Chess' : 'Checkers';
+    $('#gameEyebrow').textContent = `${G.kind === 'chess' ? 'Chess' : 'Checkers'} · ${label}`;
+    $('#gameLogo').innerHTML = `<use href="#ico-${G.kind}"/>`;
+    if(G.state.turn !== G.human) aiTurn();
+  }catch(err){ G = null; }
+}
+
 /* ---------- go ---------- */
+loadSettings();
 buildSettings();
 applySettings();
 buildMorph();
+restoreGame();
+updateResume();

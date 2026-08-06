@@ -352,7 +352,7 @@ const CHESS = (function(){
 
   /* difficulty: {maxDepth, ms, noise} */
   const LEVELS = {
-    easy:   {maxDepth:1, ms:120,  noise:0.42},
+    easy:   {maxDepth:1, ms:140,  noise:0.20},
     normal: {maxDepth:3, ms:450,  noise:0.10},
     hard:   {maxDepth:5, ms:1700, noise:0}
   };
@@ -410,7 +410,17 @@ const CHESS = (function(){
     return out;
   }
 
-  return {newGame, clone, fromFEN, legal, make, inCheck, result, evaluate, best, san, sqName, other, LEVELS};
+  function posKey(s){
+    let k = '';
+    for(let i=0;i<64;i++){
+      const p = s.board[i];
+      k += p ? (p.c === 'w' ? p.t.toUpperCase() : p.t) : '.';
+    }
+    return k + s.turn + (s.cast.wK?'K':'') + (s.cast.wQ?'Q':'') +
+           (s.cast.bK?'k':'') + (s.cast.bQ?'q':'') + ':' + s.ep;
+  }
+
+  return {newGame, clone, fromFEN, legal, make, inCheck, result, evaluate, best, san, sqName, other, posKey, LEVELS};
 })();
 
 /* ============================================================
@@ -548,7 +558,7 @@ const DRAUGHTS = (function(){
   }
 
   const LEVELS = {
-    easy:   {maxDepth:2,  ms:120,  noise:0.45},
+    easy:   {maxDepth:2,  ms:140,  noise:0.22},
     normal: {maxDepth:5,  ms:400,  noise:0.08},
     hard:   {maxDepth:12, ms:1700, noise:0}
   };
